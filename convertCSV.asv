@@ -1,0 +1,47 @@
+function convertCSV
+
+for s = [1:4]
+    s
+    load(['Raw Data\',int2str(s), '_OUTPUT']);
+    
+    subName = sprintf('%03d',3);
+    
+    details = DATA_MASTER.details(1,[1 4:8]);
+    exportName = ['CSV Data/' subName '_details.csv'];
+%     csvwrite(exportName,details);
+    
+    fileID = fopen(exportName,'w');
+    fprintf(fileID,'%d , %d , %s , %s , %s , %s',details{1,:});
+    fclose(fileID);
+    
+%     training = DATA_AGP.training_data;
+%     exportName = ['CSV Data/' subName '_training.csv'];
+%     csvwrite(exportName,training);
+%     
+%     ICU = cell2mat(DATA_QST(1,1));
+%     exportName = ['CSV Data/' subName '_ICU.csv'];
+%     csvwrite(exportName,ICU);
+%     
+%     e = DATA_AGP_EG.DEC;
+%     for t = 1:120
+%         eg_data = squeeze(e(t,1));
+%         eg_data = double(cell2mat(eg_data));
+%         eg_data(:,7) = t;
+%         eg_data(:,8) = cell2mat(squeeze(e(t,2)));
+%         exportName = ['CSV Data/' subName '_EG_dec.csv'];
+%         dlmwrite(exportName,eg_data,'precision', '%i', '-append')
+%     end
+% 
+%     e = DATA_AGP_EG.FB;
+%     for t = 1:120
+%         eg_data = squeeze(e(t,1));
+%         eg_data = double(cell2mat(eg_data));
+%         eg_data(:,7) = t;
+%         eg_data(:,8) = cell2mat(squeeze(e(t,2)));
+%         exportName = ['CSV Data/' subName '_EG_fb.csv'];
+%         dlmwrite(exportName,eg_data,'precision', '%i','-append')
+%     end
+%     
+    
+       
+end
