@@ -1,36 +1,116 @@
 ---
 title: "Injustice Attention Report"
 author: "Tom Beesley"
-format: pdf
+format: html
+editor_options: 
+  chunk_output_type: console
 ---
 
-## Quarto
+## Setup and loading in the data
 
 ```{r}
 library(tidyverse)
 library(eyetools)
 
+load("inj_unsw_data.RData")
+
+eg_stim <- 
+  eg_stim %>%
+  mutate(pNum = as.numeric(pNum))
+```
+
+## Setting up AOIs 
+
+```{r}
 # Set AOIs
-AOI_stims <- data.frame(matrix(nrow = 2, ncol = 4))
+AOI_stims <- data.frame(matrix(nrow = 3, ncol = 4))
 colnames(AOI_stims) <- c("x", "y", "width_radius", "height")
 
-AOI_stims[1,] <- c(360, 540, 600, 600) # X, Y, W, H - left
-AOI_stims[2,] <- c(1560, 540, 600, 600) # X, Y, W, H - right
+AOI_stims[1,] <- c(450, 540, 600, 600) # X, Y, W, H - left
+AOI_stims[2,] <- c(1460, 540, 600, 600) # X, Y, W, H - right
 AOI_stims[3,] <- c(960, 540, 200, 200) # X, Y, W, H - fixation
 
 AOI_stims_names <- c("left", "right", "centre")
+```
 
-spatial_plot(AOIs = AOI_stims)
+## Number of fixations
 
+Here's what a typical trial looks like with 25 fixations (using `eyetools::spatial_plot()`):
+```{r}
+data_trial <- 
+  eg_stim %>% 
+  filter(pNum == 001, 
+         trial == 3)
 
-    pData_AOI <-
-      AOI_time(fix_data = fix_d,
-               AOIs = AOI_stims,
-               AOI_names = AOI_stims_names)
+eyetools::spatial_plot(fix_data = data_trial, 
+                       AOIs = AOI_stims)
+```
 
-    pData_AOI <-
-      pData_AOI %>%
-      mutate(pNum = substr(subjs[subj],1,3), .before = trial)
+You can see from the index numbers that there is back and forth processing between the two stimuli. We can use `eyetools::AOI_seq()` to look at how the eye movements entered the different AOIs (here, just for the first 5 trials for this participant):
+
+```{r}
+
+data_p1 <- 
+  eg_stim %>% 
+  filter(pNum == 001)
+
+eyetools::AOI_seq(data = data_p1, AOIs = AOI_stims, AOI_names = AOI_stims_names) %>% 
+  head(5)
 
 ```
+
+Here's the distribution of number of fixations on a trial for all the data:
+
+```{r}
+eg_stim %>% 
+  group_by(pNum, trial) %>% 
+  summarise(nFix = n()) %>% 
+  ggplot() +
+  geom_histogram(aes(nFix), bins = 30, fill = "dark blue") + 
+  theme_classic(base_size = 12) +
+  labs(title = "Distribution of number of fixations per trial",
+       x = "Number of fixations within a trial",
+       y = "")
+```
+
+Do the participants vary much in the mean number of fixations per trial? There are a couple of outliers in terms of number of fixations. 
+
+```{r}
+
+eg_stim %>% 
+  group_by(pNum, trial) %>% 
+  summarise(n_fix = n()) %>% 
+  group_by(pNum) %>% 
+  summarise(mean_fix = mean(n_fix)) %>% 
+  ggplot(aes(mean_fix, x = "")) +
+  geom_violin() +
+  geom_dotplot(binaxis = "y", stackdir = "center")
+
+```
+
+## Looking at time in AOIs for the different trial types / stimulus valence
+
+```{r}
+
+stim_codes <- 
+  read_csv("stim_details.csv") %>% 
+  rename(trial_ID = pair_num)
+  
+
+id_data <- 
+  id_data %>% 
+  left_join(stim_codes, by = "trial_ID")
+
+eg_list <- split.data.frame(eg_stim, eg_stim[,1])
+
+AOI_list <- lapply(eg_list, AOI_time, AOIs = AOI_stims)
+
+AOI_df <- do.call(rbind.data.frame, b)
+
+d <- cbind(id_data, AOI_df) # bind together the data
+
+```
+
+
+
 
