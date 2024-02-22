@@ -144,8 +144,8 @@ eg_data_full <-
                                 2 ~ "unj_neut",
                                 3 ~ "neg_neut")) %>% 
   mutate(stim_1_eg = case_when(target_loc == 1 ~ AOI_1,
-                               target_loc == 2 ~ AOI_3),
-         stim_2_eg = case_when(target_loc == 1 ~ AOI_3,
+                               target_loc == 2 ~ AOI_2),
+         stim_2_eg = case_when(target_loc == 1 ~ AOI_2,
                                target_loc == 2 ~ AOI_1))
 ```
 
@@ -188,7 +188,7 @@ eg_fig %>%
            position=position_dodge()) +
   geom_errorbar(position = position_dodge(.9), 
                 width = .3) +
-  coord_cartesian(ylim = c(1500, 2600)) +
+  coord_cartesian(ylim = c(3000, 5000)) +
   theme_classic(base_size = 12) +
   labs(y = "Mean dwell time on AOIs",
        x = "Stimulus pair",
