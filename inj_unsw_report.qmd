@@ -91,7 +91,6 @@ eg_stim %>%
 ## Looking at time in AOIs for the different trial types / stimulus valence
 
 ```{r}
-
 stim_codes <- 
   read_csv("stim_details.csv") %>% 
   rename(trial_ID = pair_num)
@@ -107,7 +106,64 @@ AOI_list <- lapply(eg_list, AOI_time, AOIs = AOI_stims)
 
 AOI_df <- do.call(rbind.data.frame, b)
 
-d <- cbind(id_data, AOI_df) # bind together the data
+eg_data_combined <- cbind(id_data, AOI_df) # bind together the data
+
+eg_data_combined <- eg_data_combined %>% mutate(across(AOI_1:AOI_3, ~as.numeric(.x)))
+
+# pair type
+# 1 = UNJ-NEG
+# 2 = UNJ-NEUT
+# 3 = NEG-NEUT
+
+# target_loc
+# 1 = LHS
+# 2 = RHS
+
+eg_data_full <- 
+  eg_data_combined %>% 
+  mutate(pair_type = case_match(pair_type,
+                                1 ~ "unj_neg",
+                                2 ~ "unj_neut",
+                                3 ~ "neg_neut")) %>% 
+  mutate(stim_1_eg = case_when(target_loc == 1 ~ AOI_1,
+                               target_loc == 2 ~ AOI_3),
+         stim_2_eg = case_when(target_loc == 1 ~ AOI_3,
+                               target_loc == 2 ~ AOI_1))
+```
+
+# summarising the data for visualisation
+
+```{r}
+eg_means_summary <- 
+  eg_data_full %>% 
+  group_by(pNum, pair_type) %>% 
+  summarise(meanS1 = mean(stim_1_eg, na.rm = TRUE),
+            meanS2 = mean(stim_2_eg, na.rm = TRUE))
+
+eg_means_summary <- 
+eg_means_summary %>% 
+  pivot_longer(cols = c("meanS1", "meanS2"), 
+               names_prefix = "mean", 
+               names_to = "stimulus", 
+               values_to = "EG_time")
+
+eg_fig <- 
+  eg_means_summary %>% 
+  group_by(pair_type, stimulus) %>% 
+  summarise(meanEG = mean(EG_time),
+            SE_EG = sd(EG_time)/sqrt(n()))
+
+eg_fig %>% 
+  ggplot(aes(x = pair_type, y = meanEG, fill = stimulus)) +
+  geom_col(position = position_dodge2()) +
+  geom_errorbar(aes(ymin = meanEG - SE_EG,
+                    ymax = meanEG + SE_EG), 
+                position = position_dodge2()) +
+  coord_cartesian(ylim = c(1500, 2600)) +
+  theme_classic(base_size = 12) +
+  labs(y = "Mean dwell time on AOIs")
+  
+
 
 ```
 
