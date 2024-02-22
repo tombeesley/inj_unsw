@@ -1,16 +1,23 @@
 ---
 title: "Injustice Attention Report"
 author: "Tom Beesley"
-format: html
+format: 
+  pdf:
+    highlight-style: zenburn
 editor_options: 
   chunk_output_type: console
+execute: 
+  warning: false
 ---
 
 ## Setup and loading in the data
 
+The data I'm loading in here is the fixation data for all participants. This is after having processed the raw data into fixations, which is handled in another script (stitch_data.R)
+
 ```{r}
 library(tidyverse)
 library(eyetools)
+library(effectsize)
 
 load("inj_unsw_data.RData")
 
@@ -20,6 +27,8 @@ eg_stim <-
 ```
 
 ## Setting up AOIs 
+
+I set up three AOIs, for left, fixation, and right. Left and right are just guessed from the clustering of the fixations. We'll want to do something more precise with the actual placements of the stimuli further along the line. 
 
 ```{r}
 # Set AOIs
@@ -42,8 +51,9 @@ data_trial <-
   filter(pNum == 001, 
          trial == 3)
 
-eyetools::spatial_plot(fix_data = data_trial, 
+eyetools::spatial_plot(fix_data = data_trial,
                        AOIs = AOI_stims)
+
 ```
 
 You can see from the index numbers that there is back and forth processing between the two stimuli. We can use `eyetools::AOI_seq()` to look at how the eye movements entered the different AOIs (here, just for the first 5 trials for this participant):
@@ -54,12 +64,14 @@ data_p1 <-
   eg_stim %>% 
   filter(pNum == 001)
 
-eyetools::AOI_seq(data = data_p1, AOIs = AOI_stims, AOI_names = AOI_stims_names) %>% 
+eyetools::AOI_seq(data = data_p1, 
+                  AOIs = AOI_stims, 
+                  AOI_names = AOI_stims_names) %>%
   head(5)
 
 ```
 
-Here's the distribution of number of fixations on a trial for all the data:
+Here's the distribution of the number of fixations on a trial for all the data (for all participants):
 
 ```{r}
 eg_stim %>% 
@@ -90,6 +102,10 @@ eg_stim %>%
 
 ## Looking at time in AOIs for the different trial types / stimulus valence
 
+Following that exploration, we can take a look at the more important stuff:
+
+The following code takes the pair types that you've defined and matches them up with the trial data for each participant. Thus we end up with a dataframe that contains the time spent in each area of interest, and what was presented on the screen. Then depending on the location of the target (which I take to be the first stimulus named in each pair) we take the data from AOI_1 and AOI_3. This means that we then have columns that reflect time on "Stim 1" (the first stimulus in each pair) and "Stim 2" (the second stimulus in each pair), irrespective of whether they are on the left or right each trial. 
+
 ```{r}
 stim_codes <- 
   read_csv("stim_details.csv") %>% 
@@ -104,11 +120,13 @@ eg_list <- split.data.frame(eg_stim, eg_stim[,1])
 
 AOI_list <- lapply(eg_list, AOI_time, AOIs = AOI_stims)
 
-AOI_df <- do.call(rbind.data.frame, b)
+AOI_df <- do.call(rbind.data.frame, AOI_list)
 
 eg_data_combined <- cbind(id_data, AOI_df) # bind together the data
 
-eg_data_combined <- eg_data_combined %>% mutate(across(AOI_1:AOI_3, ~as.numeric(.x)))
+eg_data_combined <- 
+  eg_data_combined %>% 
+  mutate(across(AOI_1:AOI_3, ~as.numeric(.x)))
 
 # pair type
 # 1 = UNJ-NEG
@@ -131,15 +149,21 @@ eg_data_full <-
                                target_loc == 2 ~ AOI_1))
 ```
 
-# summarising the data for visualisation
+# Summarising the data for visualisation
+
+Taking this final combined dataframe, we can summarise how much time each person spends on each stimulus in the pair, as a function of the trial type. This is plotted below:
 
 ```{r}
+# summarise the data for each participant, to get
+# the critical 6 values (3 pairs x 2 stimuli)
 eg_means_summary <- 
   eg_data_full %>% 
   group_by(pNum, pair_type) %>% 
   summarise(meanS1 = mean(stim_1_eg, na.rm = TRUE),
             meanS2 = mean(stim_2_eg, na.rm = TRUE))
 
+# rather than have two columns for the two stimuli
+# we should pivot the data and make stimulus a variable
 eg_means_summary <- 
 eg_means_summary %>% 
   pivot_longer(cols = c("meanS1", "meanS2"), 
@@ -147,22 +171,49 @@ eg_means_summary %>%
                names_to = "stimulus", 
                values_to = "EG_time")
 
+# calculate grand means and SE for the sample (for plotting)
 eg_fig <- 
   eg_means_summary %>% 
   group_by(pair_type, stimulus) %>% 
   summarise(meanEG = mean(EG_time),
             SE_EG = sd(EG_time)/sqrt(n()))
 
+# plot the data
 eg_fig %>% 
-  ggplot(aes(x = pair_type, y = meanEG, fill = stimulus)) +
-  geom_col(position = position_dodge2()) +
-  geom_errorbar(aes(ymin = meanEG - SE_EG,
-                    ymax = meanEG + SE_EG), 
-                position = position_dodge2()) +
+  ggplot(aes(x = pair_type, y = meanEG, 
+             fill = stimulus, 
+             ymin = meanEG - SE_EG,
+             ymax = meanEG + SE_EG)) +
+  geom_col(color= "black", 
+           position=position_dodge()) +
+  geom_errorbar(position = position_dodge(.9), 
+                width = .3) +
   coord_cartesian(ylim = c(1500, 2600)) +
   theme_classic(base_size = 12) +
-  labs(y = "Mean dwell time on AOIs")
-  
+  labs(y = "Mean dwell time on AOIs",
+       x = "Stimulus pair",
+       fill = "Stimulus",
+       title = "EG on each of two stimuli across different trial types")
+```
+
+We'll run a t-test to see if the difference between unjust and negative stimuli is a real effect - yes it is! And with a medium effect size. 
+
+```{r}
+# filter to just the UNJ-NEG data
+t_data_unj_neg <- 
+  eg_means_summary %>% 
+  filter(pair_type == "unj_neg")
+
+# paired t-test
+t.test(data = t_data_unj_neg, 
+       EG_time~stimulus, 
+       paired = TRUE)
+
+# relevant effect size
+effectsize::cohens_d(data = t_data_unj_neg, 
+                     EG_time~stimulus, 
+                     paired = TRUE)
+
 
 
 ```
