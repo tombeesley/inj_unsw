@@ -28,16 +28,16 @@ eg_stim <-
 
 ## Setting up AOIs 
 
-I set up three AOIs, for left, fixation, and right. Left and right are just guessed from the clustering of the fixations. We'll want to do something more precise with the actual placements of the stimuli further along the line. 
+I set up three AOIs, for left, fixation, and right. Left and right AOIs are now calculated from the original matlab code. 
 
 ```{r}
 # Set AOIs
 AOI_stims <- data.frame(matrix(nrow = 3, ncol = 4))
 colnames(AOI_stims) <- c("x", "y", "width_radius", "height")
 
-AOI_stims[1,] <- c(450, 540, 600, 600) # X, Y, W, H - left
-AOI_stims[2,] <- c(1460, 540, 600, 600) # X, Y, W, H - right
-AOI_stims[3,] <- c(960, 540, 200, 200) # X, Y, W, H - fixation
+AOI_stims[1,] <- c(510, 540, 700, 500) # X, Y, W, H - left
+AOI_stims[2,] <- c(1410, 540, 700, 500) # X, Y, W, H - right
+AOI_stims[3,] <- c(960, 540, 150, 150) # X, Y, W, H - fixation
 
 AOI_stims_names <- c("left", "right", "centre")
 ```
@@ -118,8 +118,8 @@ id_data <-
 
 eg_list <- split.data.frame(eg_stim, eg_stim[,1])
 
+# get AOI time result for all participants
 AOI_list <- lapply(eg_list, AOI_time, AOIs = AOI_stims)
-
 AOI_df <- do.call(rbind.data.frame, AOI_list)
 
 eg_data_combined <- cbind(id_data, AOI_df) # bind together the data
@@ -205,19 +205,34 @@ t_data_unj_neg <-
   filter(pair_type == "unj_neg")
 
 # paired t-test
-t.test(data = t_data_unj_neg, 
-       EG_time~stimulus, 
+t.test(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S1"], 
+       t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S2"], 
        paired = TRUE)
 
 # relevant effect size
-effectsize::cohens_d(data = t_data_unj_neg, 
-                     EG_time~stimulus, 
+effectsize::cohens_d(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S1"],
+                     t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S2"], 
                      paired = TRUE)
 
 
 
 ```
 
+# Proportion of trials with a first fixation on target/non-target
+
+```{r}
+
+eg_list
+
+b <- eyetools::AOI_seq(data = eg_stim, 
+                  AOIs = AOI_stims, 
+                  AOI_names = AOI_stims_names)
+
+# get AOI time result for all participants
+AOI_seq_list <- lapply(eg_list, AOI_seq, AOIs = AOI_stims, AOI_names = AOI_stims_names)
+AOI_seq_df <- do.call(rbind.data.frame, AOI_seq_list)
+eg_seq_data_combined <- cbind(id_data, AOI_seq_df) # bind together the data
+```
 
 
 
