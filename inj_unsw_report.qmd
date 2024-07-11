@@ -18,6 +18,9 @@ The data I'm loading in here is the fixation data for all participants. This is 
 library(tidyverse)
 library(eyetools)
 library(effectsize)
+library(afex)
+
+rm(list = ls())
 
 load("inj_unsw_data.RData")
 
@@ -222,17 +225,83 @@ effectsize::cohens_d(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S1"],
 
 ```{r}
 
-eg_list
-
-b <- eyetools::AOI_seq(data = eg_stim, 
-                  AOIs = AOI_stims, 
-                  AOI_names = AOI_stims_names)
-
 # get AOI time result for all participants
 AOI_seq_list <- lapply(eg_list, AOI_seq, AOIs = AOI_stims, AOI_names = AOI_stims_names)
 AOI_seq_df <- do.call(rbind.data.frame, AOI_seq_list)
 eg_seq_data_combined <- cbind(id_data, AOI_seq_df) # bind together the data
+
+# arranging the sequence of AOI entries
+eg_seq_data_combined <- 
+  eg_seq_data_combined %>% 
+  separate_longer_delim(AOI_entry_seq, delim = ";") %>% 
+  group_by(pNum, trial) %>% 
+  mutate(entry = 1:n())
+
+# for each trial assessing whether the first was on fixation, and which stimulus was viewed first
+eg_early_summary <- 
+  eg_seq_data_combined %>% 
+  group_by(pNum, trial) %>% 
+  mutate(fixFirst = AOI_entry_seq[1],
+         firstStimEntry = case_when(!fixFirst == "centre" ~ AOI_entry_seq[1],
+                                    fixFirst == "centre" ~ AOI_entry_seq[2])) %>% 
+  slice(1) %>% 
+  select(-AOI_entry_seq, -entry) %>% 
+  ungroup()
+  
+# pair type
+# 1 = UNJ-NEG
+# 2 = UNJ-NEUT
+# 3 = NEG-NEUT
+
+# target_loc
+# 1 = LHS
+# 2 = RHS
+
+eg_early_summary <- 
+  eg_early_summary %>% 
+  mutate(pair_type = case_match(pair_type,
+                                1 ~ "unj_neg",
+                                2 ~ "unj_neut",
+                                3 ~ "neg_neut"),
+         fixFirst = case_when(fixFirst == "centre" ~ 1,
+                              .default = 0),
+         firstStimEntry = case_when(target_loc == 1 & firstStimEntry == "left" ~ "target",
+                                    target_loc == 2 & firstStimEntry == "right" ~ "target",
+                                    target_loc == 1 & firstStimEntry == "right" ~ "alt",
+                                    target_loc == 2 & firstStimEntry == "left" ~ "alt"))
+
+count(eg_early_summary, firstStimEntry)
+mean(eg_early_summary$fixFirst)
+
+pair_summary_first_EG <- 
+  eg_early_summary %>% 
+  filter(fixFirst == 1) %>% 
+  group_by(pNum, pair_type) %>% 
+  summarise(prop_target_first = mean(firstStimEntry=="target", na.rm = TRUE))
+
+
+pair_summary_first_EG %>% 
+  group_by(pair_type) %>% 
+  summarise(prop_targ = mean(prop_target_first),
+            se = sd(prop_target_first)/sqrt(n())) %>% 
+  ggplot(aes(x = pair_type, y = prop_targ, 
+             ymin = prop_targ - se,
+             ymax = prop_targ + se)) +
+  geom_col(color= "black", 
+           position=position_dodge()) +
+  geom_errorbar(position = position_dodge(.9), 
+                width = .3) +
+  coord_cartesian(ylim = c(0.4, 0.6)) +
+  theme_classic(base_size = 12) +
+  labs(y = "Prop. of first fixation on target stimulus",
+       x = "Stimulus pair",
+       title = "Proportion of trials with a fixation on the target stimulus")
+
+
+aov_car(data = pair_summary_first_EG,
+        formula = prop_target_first ~ Error(pNum/pair_type))
+
 ```
 
-
+In this analysis I looked at the order in which participants landed in the three different areas of interest - left stimulus, right stimulus, and central fixation. I then took just the initial entries on each trial, noting when participants looked at the centre first (i.e., were following instructions to fixate on the fixation cross). On average, participants only did this on 72% of trials, and I analysed only data from these trials (the pattern is the same if you include trials where they didn't fixate first). Then I noted which stimulus they looked at first. From this we can calculate the proportion of trials on which they fixated the target or the alternative stimulus. It is fairly close to 50/50 in all three trial types, but there is some suggestion of a difference on the UNJ v NEG trial type. Here they seem to go to the "alternative" (non-target) stimulus on about 55% of trials. The ANOVA reveals an effect of trial type. 
 
