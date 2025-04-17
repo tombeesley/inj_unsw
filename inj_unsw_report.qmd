@@ -10,6 +10,10 @@ execute:
   warning: false
 ---
 
+Most recent analysis run on: `r date()`
+
+Using eyetools version: `r citation("eyetools")`
+
 ## Setup and loading in the data
 
 The data I'm loading in here is the fixation data for all participants. This is after having processed the raw data into fixations, which is handled in another script (stitch_data.R)
@@ -24,9 +28,13 @@ rm(list = ls())
 
 load("inj_unsw_data.RData")
 
+eg_fix <- 
+  eg_fix %>%
+  rename(pID = pNum)
+
 eg_stim <- 
   eg_stim %>%
-  mutate(pNum = as.numeric(pNum))
+  rename(pID = pNum)
 ```
 
 ## Setting up AOIs 
@@ -35,8 +43,7 @@ I set up three AOIs, for left, fixation, and right. Left and right AOIs are now 
 
 ```{r}
 # Set AOIs
-AOI_stims <- data.frame(matrix(nrow = 3, ncol = 4))
-colnames(AOI_stims) <- c("x", "y", "width_radius", "height")
+AOI_stims <- eyetools::create_AOI_df(3)
 
 AOI_stims[1,] <- c(510, 540, 700, 500) # X, Y, W, H - left
 AOI_stims[2,] <- c(1410, 540, 700, 500) # X, Y, W, H - right
@@ -54,7 +61,9 @@ data_trial <-
   filter(pNum == 001, 
          trial == 3)
 
-eyetools::spatial_plot(fix_data = data_trial,
+eyetools::plot_spatial(fix_data = eg_stim,
+                       pID_values = 001,
+                       trial_values = 3,
                        AOIs = AOI_stims)
 
 ```
