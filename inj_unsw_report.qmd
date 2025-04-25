@@ -20,21 +20,24 @@ The data I'm loading in here is the fixation data for all participants. This is 
 
 ```{r}
 library(tidyverse)
-library(eyetools)
+library(eyetools) # uses 0.9.0
 library(effectsize)
 library(afex)
 
 rm(list = ls())
 
-load("inj_unsw_data.RData")
+load("inj_unsw_EG_data.RData")
 
-eg_fix <- 
-  eg_fix %>%
-  rename(pID = pNum)
+# limit to period 2 - stimulus presentation period
 
-eg_stim <- 
-  eg_stim %>%
-  rename(pID = pNum)
+fixation_data <- filter(fixation_data, period == 2)
+
+# limit fixations to within bounds of the screen
+
+fixation_data <- 
+  fixation_data %>% 
+  filter(between(x, 0, 1920) & between(y,0,1080))
+
 ```
 
 ## Setting up AOIs 
@@ -50,19 +53,17 @@ AOI_stims[2,] <- c(1410, 540, 700, 500) # X, Y, W, H - right
 AOI_stims[3,] <- c(960, 540, 150, 150) # X, Y, W, H - fixation
 
 AOI_stims_names <- c("left", "right", "centre")
+
+
 ```
 
 ## Number of fixations
 
 Here's what a typical trial looks like with 25 fixations (using `eyetools::spatial_plot()`):
 ```{r}
-data_trial <- 
-  eg_stim %>% 
-  filter(pNum == 001, 
-         trial == 3)
 
-eyetools::plot_spatial(fix_data = eg_stim,
-                       pID_values = 001,
+eyetools::plot_spatial(fix_data = fixation_data,
+                       pID_values = "001",
                        trial_values = 3,
                        AOIs = AOI_stims)
 
@@ -73,8 +74,8 @@ You can see from the index numbers that there is back and forth processing betwe
 ```{r}
 
 data_p1 <- 
-  eg_stim %>% 
-  filter(pNum == 001)
+  fixation_data %>% 
+  filter(pID == "001")
 
 eyetools::AOI_seq(data = data_p1, 
                   AOIs = AOI_stims, 
@@ -86,8 +87,8 @@ eyetools::AOI_seq(data = data_p1,
 Here's the distribution of the number of fixations on a trial for all the data (for all participants):
 
 ```{r}
-eg_stim %>% 
-  group_by(pNum, trial) %>% 
+fixation_data %>%
+  group_by(pID, trial) %>% 
   summarise(nFix = n()) %>% 
   ggplot() +
   geom_histogram(aes(nFix), bins = 30, fill = "dark blue") + 
@@ -101,10 +102,10 @@ Do the participants vary much in the mean number of fixations per trial? There a
 
 ```{r}
 
-eg_stim %>% 
-  group_by(pNum, trial) %>% 
+fixation_data %>% 
+  group_by(pID, trial) %>% 
   summarise(n_fix = n()) %>% 
-  group_by(pNum) %>% 
+  group_by(pID) %>% 
   summarise(mean_fix = mean(n_fix)) %>% 
   ggplot(aes(mean_fix, x = "")) +
   geom_violin() +
@@ -126,19 +127,29 @@ stim_codes <-
 
 id_data <- 
   id_data %>% 
-  left_join(stim_codes, by = "trial_ID")
+  left_join(stim_codes, by = "trial_ID") %>% 
+  rename(pID = pNum) %>%
+  group_by(pID) %>% 
+  mutate(trial = 1:60) %>% 
+  ungroup()
 
-eg_list <- split.data.frame(eg_stim, eg_stim[,1])
+# perform a conditional transform of the fixation data across the horiztonal midline
+fixation_data <- 
+  left_join(fixation_data, id_data, by = c("pID", "trial"))
 
-# get AOI time result for all participants
-AOI_list <- lapply(eg_list, AOI_time, AOIs = AOI_stims)
-AOI_df <- do.call(rbind.data.frame, AOI_list)
+fixation_data <- 
+  conditional_transform(data = fixation_data, 
+                        flip = "x", 
+                        cond_column = "target_loc", 
+                        cond_values = 1)
 
-eg_data_combined <- cbind(id_data, AOI_df) # bind together the data
+
+AOI_time_df <- AOI_time(fixation_data, data_type = "fix", AOIs = AOI_stims)
 
 eg_data_combined <- 
-  eg_data_combined %>% 
-  mutate(across(AOI_1:AOI_3, ~as.numeric(.x)))
+  left_join(id_data, AOI_time_df, by = c("pID", "trial")) %>%  # bind together the data
+  drop_na(AOI) %>% 
+  pivot_wider(names_from = AOI, values_from = time)
 
 # pair type
 # 1 = UNJ-NEG
@@ -155,10 +166,11 @@ eg_data_full <-
                                 1 ~ "unj_neg",
                                 2 ~ "unj_neut",
                                 3 ~ "neg_neut")) %>% 
-  mutate(stim_1_eg = case_when(target_loc == 1 ~ AOI_1,
-                               target_loc == 2 ~ AOI_2),
-         stim_2_eg = case_when(target_loc == 1 ~ AOI_2,
-                               target_loc == 2 ~ AOI_1))
+  rename(target_time = AOI_1,
+         nontarget_time = AOI_2,
+         centre_time = AOI_3)
+
+
 ```
 
 # Summarising the data for visualisation
@@ -170,16 +182,16 @@ Taking this final combined dataframe, we can summarise how much time each person
 # the critical 6 values (3 pairs x 2 stimuli)
 eg_means_summary <- 
   eg_data_full %>% 
-  group_by(pNum, pair_type) %>% 
-  summarise(meanS1 = mean(stim_1_eg, na.rm = TRUE),
-            meanS2 = mean(stim_2_eg, na.rm = TRUE))
+  group_by(pID, pair_type) %>% 
+  summarise(mean_target = mean(target_time, na.rm = TRUE),
+            mean_nontarget = mean(nontarget_time, na.rm = TRUE))
 
 # rather than have two columns for the two stimuli
 # we should pivot the data and make stimulus a variable
 eg_means_summary <- 
 eg_means_summary %>% 
-  pivot_longer(cols = c("meanS1", "meanS2"), 
-               names_prefix = "mean", 
+  pivot_longer(cols = c("mean_target", "mean_nontarget"), 
+               names_prefix = "mean_", 
                names_to = "stimulus", 
                values_to = "EG_time")
 
@@ -234,29 +246,20 @@ effectsize::cohens_d(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S1"],
 
 ```{r}
 
-# get AOI time result for all participants
-AOI_seq_list <- lapply(eg_list, AOI_seq, AOIs = AOI_stims, AOI_names = AOI_stims_names)
-AOI_seq_df <- do.call(rbind.data.frame, AOI_seq_list)
-eg_seq_data_combined <- cbind(id_data, AOI_seq_df) # bind together the data
+# get AOI seq result for all participants
+AOI_seq_df <- AOI_seq(fixation_data, AOIs = AOI_stims, AOI_names = AOI_stims_names)
+eg_seq_data_combined <- left_join(id_data, AOI_seq_df, by = c("pID", "trial")) # bind together the data
 
-# arranging the sequence of AOI entries
-eg_seq_data_combined <- 
+# for each trial get details of the first fixation on each AOI
+first_entry_each_AOI <- 
   eg_seq_data_combined %>% 
-  separate_longer_delim(AOI_entry_seq, delim = ";") %>% 
-  group_by(pNum, trial) %>% 
-  mutate(entry = 1:n())
+  group_by(pID, trial) %>% 
+  distinct(AOI, .keep_all = TRUE) %>% 
+  mutate(pair_type = case_match(pair_type,
+                                1 ~ "unj_neg",
+                                2 ~ "unj_neut",
+                                3 ~ "neg_neut"))
 
-# for each trial assessing whether the first was on fixation, and which stimulus was viewed first
-eg_early_summary <- 
-  eg_seq_data_combined %>% 
-  group_by(pNum, trial) %>% 
-  mutate(fixFirst = AOI_entry_seq[1],
-         firstStimEntry = case_when(!fixFirst == "centre" ~ AOI_entry_seq[1],
-                                    fixFirst == "centre" ~ AOI_entry_seq[2])) %>% 
-  slice(1) %>% 
-  select(-AOI_entry_seq, -entry) %>% 
-  ungroup()
-  
 # pair type
 # 1 = UNJ-NEG
 # 2 = UNJ-NEUT
@@ -266,12 +269,9 @@ eg_early_summary <-
 # 1 = LHS
 # 2 = RHS
 
-eg_early_summary <- 
-  eg_early_summary %>% 
-  mutate(pair_type = case_match(pair_type,
-                                1 ~ "unj_neg",
-                                2 ~ "unj_neut",
-                                3 ~ "neg_neut"),
+#first_entry_each_AOI <- 
+  first_entry_each_AOI %>% 
+  ,
          fixFirst = case_when(fixFirst == "centre" ~ 1,
                               .default = 0),
          firstStimEntry = case_when(target_loc == 1 & firstStimEntry == "left" ~ "target",

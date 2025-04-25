@@ -78,6 +78,8 @@ AOI_stims[3,] <- c(960, 540, 150, 150) # X, Y, W, H - fixation
 
 AOI_stims_names <- c("left", "right", "centre")
 
+raw_data <- filter(raw_data, period == 2)
+
 aoi_bin_data <- 
   eyetools::AOI_time_binned(data = raw_data, 
                             AOIs = AOI_stims, 
@@ -105,6 +107,3 @@ for (p in 1:2){
 }
 
 save(id_data, fixation_data, aoi_bin_data, file = "inj_unsw_EG_data.RData")
-
-
-fixation_data <- rbind(fixation_data, period_fix) # combine data array with existing data
