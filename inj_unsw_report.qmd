@@ -229,13 +229,13 @@ t_data_unj_neg <-
   filter(pair_type == "unj_neg")
 
 # paired t-test
-t.test(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S1"], 
-       t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S2"], 
+t.test(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "target"], 
+       t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "nontarget"], 
        paired = TRUE)
 
 # relevant effect size
-effectsize::cohens_d(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S1"],
-                     t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "S2"], 
+effectsize::cohens_d(t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "target"],
+                     t_data_unj_neg$EG_time[t_data_unj_neg$stimulus == "nontarget"], 
                      paired = TRUE)
 
 
@@ -258,7 +258,11 @@ first_entry_each_AOI <-
   mutate(pair_type = case_match(pair_type,
                                 1 ~ "unj_neg",
                                 2 ~ "unj_neut",
-                                3 ~ "neg_neut"))
+                                3 ~ "neg_neut")) %>% 
+  mutate(AOI = case_match(AOI,
+                          "left" ~ "target",
+                          "right" ~ "nontarget",
+                          "centre" ~ "centre"))
 
 # pair type
 # 1 = UNJ-NEG
