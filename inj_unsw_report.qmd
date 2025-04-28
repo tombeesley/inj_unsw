@@ -262,7 +262,14 @@ first_entry_each_AOI <-
   mutate(AOI = case_match(AOI,
                           "left" ~ "target",
                           "right" ~ "nontarget",
-                          "centre" ~ "centre"))
+                          "centre" ~ "centre")) %>% 
+  ungroup() %>% 
+  complete(trial, AOI) %>% 
+  arrange(pID, trial, entry_n)
+
+write_csv(first_entry_each_AOI, file = "first_entry_time.csv")
+
+
 
 # pair type
 # 1 = UNJ-NEG
@@ -274,14 +281,9 @@ first_entry_each_AOI <-
 # 2 = RHS
 
 #first_entry_each_AOI <- 
-  first_entry_each_AOI %>% 
-  ,
-         fixFirst = case_when(fixFirst == "centre" ~ 1,
-                              .default = 0),
-         firstStimEntry = case_when(target_loc == 1 & firstStimEntry == "left" ~ "target",
-                                    target_loc == 2 & firstStimEntry == "right" ~ "target",
-                                    target_loc == 1 & firstStimEntry == "right" ~ "alt",
-                                    target_loc == 2 & firstStimEntry == "left" ~ "alt"))
+first_entry_each_AOI %>%
+  mutate(fixFirst = case_when(fixFirst == "centre" ~ 1,
+                              .default = 0))
 
 count(eg_early_summary, firstStimEntry)
 mean(eg_early_summary$fixFirst)
