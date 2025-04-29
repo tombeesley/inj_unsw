@@ -12,17 +12,18 @@ execute:
 
 Most recent analysis run on: `r date()`
 
-Using eyetools version: `r citation("eyetools")`
-
 ## Setup and loading in the data
 
 The data I'm loading in here is the fixation data for all participants. This is after having processed the raw data into fixations, which is handled in another script (stitch_data.R)
 
 ```{r}
 library(tidyverse)
-library(eyetools) # uses 0.9.0
+library(eyetools) # uses 0.9.1
 library(effectsize)
 library(afex)
+
+citation("eyetools")
+
 
 rm(list = ls())
 
@@ -269,8 +270,6 @@ first_entry_each_AOI <-
 
 write_csv(first_entry_each_AOI, file = "first_entry_time.csv")
 
-
-
 # pair type
 # 1 = UNJ-NEG
 # 2 = UNJ-NEUT
@@ -280,19 +279,25 @@ write_csv(first_entry_each_AOI, file = "first_entry_time.csv")
 # 1 = LHS
 # 2 = RHS
 
-#first_entry_each_AOI <- 
-first_entry_each_AOI %>%
-  mutate(fixFirst = case_when(fixFirst == "centre" ~ 1,
-                              .default = 0))
+# create variable reflecting centre fixation as first entry
+first_entry_each_AOI <- 
+  first_entry_each_AOI %>% 
+  group_by(pID, trial) %>% 
+  mutate(centreFirst = case_when(AOI[1L] == "centre" ~ 1,
+                                 .default = 0),
+         firstStim = case_when(AOI[1L] == "centre" & n() > 1 ~ AOI[2L],
+                               .default = NA))
 
-count(eg_early_summary, firstStimEntry)
-mean(eg_early_summary$fixFirst)
+# proportion of trials overall with a fixation on the centre
+mean(first_entry_each_AOI$centreFirst, na.rm = TRUE)
 
 pair_summary_first_EG <- 
-  eg_early_summary %>% 
-  filter(fixFirst == 1) %>% 
-  group_by(pNum, pair_type) %>% 
-  summarise(prop_target_first = mean(firstStimEntry=="target", na.rm = TRUE))
+  first_entry_each_AOI %>% 
+  filter(centreFirst == 1) %>% 
+  group_by(pID, trial) %>% 
+  slice(1) %>% 
+  group_by(pID, pair_type) %>% 
+  summarise(prop_target_first = mean(firstStim=="target", na.rm = TRUE))
 
 
 pair_summary_first_EG %>% 
@@ -314,9 +319,52 @@ pair_summary_first_EG %>%
 
 
 aov_car(data = pair_summary_first_EG,
-        formula = prop_target_first ~ Error(pNum/pair_type))
+        formula = prop_target_first ~ Error(pID/pair_type))
 
 ```
 
-In this analysis I looked at the order in which participants landed in the three different areas of interest - left stimulus, right stimulus, and central fixation. I then took just the initial entries on each trial, noting when participants looked at the centre first (i.e., were following instructions to fixate on the fixation cross). On average, participants only did this on 72% of trials, and I analysed only data from these trials (the pattern is the same if you include trials where they didn't fixate first). Then I noted which stimulus they looked at first. From this we can calculate the proportion of trials on which they fixated the target or the alternative stimulus. It is fairly close to 50/50 in all three trial types, but there is some suggestion of a difference on the UNJ v NEG trial type. Here they seem to go to the "alternative" (non-target) stimulus on about 55% of trials. The ANOVA reveals an effect of trial type. 
+In this analysis I looked at the order in which participants landed in the three different areas of interest - left stimulus, right stimulus, and central fixation. I then took just the initial entries on each trial, noting when participants looked at the centre first (i.e., were following instructions to fixate on the fixation cross). On average, participants did this on 79% of trials, and I analysed only data from these trials (the pattern is the same if you include trials where they didn't fixate first). Then I noted which stimulus they looked at first. From this we can calculate the proportion of trials on which they fixated the target or the alternative stimulus. It is fairly close to 50/50 in all three trial types, but there is some suggestion of a difference on the UNJ v NEG trial type. Here they seem to go to the target stimulus on about 55% of trials. The ANOVA reveals an effect of trial type. 
 
+# Time to first fixation on each stimulus
+
+```{r}
+
+time_of_first_entry <- 
+  first_entry_each_AOI %>% 
+  filter(centreFirst == 1) %>% 
+  group_by(pID, trial, pair_type, AOI) %>% 
+  summarise(timeOn = start)
+
+timeOn_by_P <- 
+  time_of_first_entry %>% 
+  filter(AOI != "centre") %>% 
+  mutate(AOI = fct_relevel(AOI, "target", "nontarget")) %>% 
+  group_by(pID, pair_type, AOI) %>% 
+  summarise(timeOn = mean(timeOn, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  complete(pID, pair_type, AOI) # complete missing values
+
+write_csv(timeOn_by_P, file = "time_to_first_fixation_on_AOI.csv")
+
+timeOn_by_P %>% 
+  group_by(pair_type, AOI) %>% 
+  summarise(mean_timeOn = mean(timeOn, na.rm = TRUE),
+            se_timeOn = sd(timeOn, na.rm = TRUE)/sqrt(n())) %>% 
+  ggplot(aes(x = pair_type, fill = AOI, y = mean_timeOn,
+             ymin = mean_timeOn - se_timeOn,
+             ymax = mean_timeOn + se_timeOn)) +
+  geom_col(position=position_dodge(), colour = "black") +
+  geom_errorbar(position = position_dodge(.9), 
+                width = .3) +
+  coord_cartesian(ylim = c(400, 1200)) +
+  theme_classic(base_size = 12) +
+  labs(y = "Mean time to first fixation on each stimulus",
+       x = "Stimulus pair",
+       title = "Time in milliseconds")
+
+aov_car(data = timeOn_by_P,
+        formula = timeOn ~ Error(pID/pair_type*AOI))
+
+```
+
+This figure shows the average time it takes to fixate on the target (first stimulus in the pair) versus the non-target (second stimulus in the pair) as a function of pair type. 
