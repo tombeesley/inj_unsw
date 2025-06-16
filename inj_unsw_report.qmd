@@ -368,3 +368,51 @@ aov_car(data = timeOn_by_P,
 ```
 
 This figure shows the average time it takes to fixate on the target (first stimulus in the pair) versus the non-target (second stimulus in the pair) as a function of pair type. 
+
+# Additional files required
+
+Vivian emailed on 27/05/25 to ask for files containing: "total number of first fixations, total dwell time, and dwell time in 2 second buckets"
+
+Total number of first fixations:
+
+```{r}
+
+first_entry_each_AOI %>% 
+  group_by(pID, trial) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  group_by(pID, pair_type) %>% 
+  count(firstStim) %>% 
+  write_csv("total_number_first_fixations.csv")
+
+
+```
+
+Total dwell time:
+
+```{r}
+eg_means_summary %>% 
+  group_by(pID, pair_type, stimulus) %>% 
+  summarise(meanEG = mean(EG_time)) %>% 
+  write_csv("total_dwell_time.csv")
+```
+
+Dwell time in 2 seconds bins:
+
+```{r}
+
+AOI_bin_combined <- 
+  aoi_bin_data %>% 
+  left_join(id_data, by = c("pID", "trial"))
+
+AOI_bin_combined %>% 
+  mutate(new_left = ifelse(target_loc == 2, right, left),
+         new_right = ifelse(target_loc == 2, left, right)) %>% 
+  mutate(target = new_left, nontarget = new_right, .keep = "unused") %>% 
+  select(pID:bin_n, target, nontarget, centre:target_loc) %>% 
+  write_csv("binned_time_AOI.csv")
+
+
+```
+
+
